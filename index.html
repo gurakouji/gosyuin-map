@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>一宮・宗廟・稲荷マップ</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="参拝マップ">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#f6f3ee">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<style>
+/* 左に絞り込みと一覧、右に地図。スマホでは地図の下に一覧 */
+:root {
+  --bg: #f6f3ee; --panel: #fffdf9; --fg: #2a2522; --muted: #7a6f66; --line: #e3dbd1;
+  --c-ichi: #c0392b; --c-sobyo: #7b4fa0; --c-inari: #d9822b; --c-shisho: #2f7d6d;
+  --done: #2a2522;
+  --display: "Shippori Mincho", "Hiragino Mincho ProN", serif;
+  --body: "Zen Kaku Gothic New", "Hiragino Sans", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #1b1917; --panel: #24211e; --fg: #ede6dd; --muted: #a59a8f; --line: #3a3530;
+    --c-ichi: #e36b5c; --c-sobyo: #b08ad3; --c-inari: #efa257; --c-shisho: #5fb7a4; --done: #ede6dd; color-scheme: dark; }
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 14px/1.6 var(--body); display: grid; grid-template-columns: 360px 1fr; height: 100dvh; }
+aside { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); background: var(--panel); }
+header { padding: 16px 18px 12px; border-bottom: 1px solid var(--line); display: grid; gap: 10px; }
+h1 { margin: 0; font: 700 21px/1.3 var(--display); letter-spacing: .04em; }
+.sub { margin: 0; color: var(--muted); font-size: 12px; }
+.sub b { color: var(--fg); font-variant-numeric: tabular-nums; }
+.cats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.cat { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; user-select: none; white-space: nowrap; }
+.cat input { margin: 0; accent-color: var(--fg); }
+.dot { width: 11px; height: 11px; border-radius: 50%; flex: none; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.25); }
+.cat .n { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+.row { display: flex; gap: 6px; }
+#q { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); font: inherit; font-size: 16px; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { flex: 1; border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; padding: 6px 4px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--fg); color: var(--panel); }
+#list { list-style: none; margin: 0; padding: 0 0 env(safe-area-inset-bottom, 0px); overflow-y: auto; flex: 1; -webkit-overflow-scrolling: touch; }
+#list li { padding: 8px 12px 8px 6px; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 44px 1fr; align-items: center; }
+#list .chk { width: 44px; height: 44px; border: 0; background: none; display: grid; place-items: center; cursor: pointer; padding: 0; }
+#list .box { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--c); display: grid; place-items: center; color: #fff; font-size: 13px; font-weight: 700; }
+#list li.done .box { background: var(--c); }
+#list .info { cursor: pointer; min-width: 0; }
+#list .nm { font-weight: 700; }
+#list li.done .nm::after { content: attr(data-date); margin-left: 8px; color: var(--muted); font-weight: 400; font-size: 11px; font-variant-numeric: tabular-nums; }
+#list .meta { color: var(--muted); font-size: 12px; }
+#list .empty { display: block; padding: 24px 18px; color: var(--muted); cursor: default; }
+footer { display: flex; gap: 8px; padding: 8px 18px calc(8px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--line); }
+footer button, .pop button { font: inherit; font-size: 12px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); cursor: pointer; }
+#map { height: 100%; min-height: 0; }
+.pin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.4); display: grid; place-items: center; color: #fff; font: 700 11px/1 sans-serif; }
+.pin.big { width: 22px; height: 22px; }
+.pin.done { border-color: var(--done); box-shadow: 0 0 0 2px #fff, 0 1px 4px rgba(0,0,0,.5); }
+.pin.me { background: #1a73e8; width: 16px; height: 16px; box-shadow: 0 0 0 6px rgba(26,115,232,.25); }
+.leaflet-popup-content { font: 13px/1.6 var(--body); }
+.pop h3 { margin: 0 0 4px; font: 700 16px/1.3 var(--display); }
+.pop .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.pop .tag { color: #fff; font-size: 11px; padding: 1px 7px; border-radius: 10px; }
+.pop .approx { color: #b34; font-size: 12px; }
+.pop .links { margin-top: 6px; display: flex; gap: 12px; }
+.pop .visit { margin-top: 8px; width: 100%; padding: 8px; font-size: 14px; font-weight: 700; }
+.pop .visit.on { background: #2a2522; color: #fff; border-color: #2a2522; }
+.locate { width: 34px; height: 34px; background: #fff; border: 0; cursor: pointer; font-size: 18px; display: grid; place-items: center; color: #333; }
+#toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--fg); color: var(--panel); padding: 8px 14px; border-radius: 20px; font-size: 13px; z-index: 1000; }
+@media (max-width: 760px) {
+  body { grid-template-columns: 1fr; grid-template-rows: 48dvh 1fr; }
+  aside { order: 2; border-right: 0; border-top: 1px solid var(--line); }
+  header { padding: 12px 14px 10px; }
+  h1 { font-size: 18px; }
+  #map { order: 1; }
+}
+</style>
+</head>
+<body>
+<aside>
+  <header>
+    <div>
+      <h1>一宮・宗廟・稲荷マップ</h1>
+      <p class="sub">参拝済み <b id="doneCount">0</b> / <span id="total"></span> か所</p>
+    </div>
+    <div class="cats" id="cats"></div>
+    <div class="row">
+      <input id="q" type="search" placeholder="社名・国名・所在地で検索">
+    </div>
+    <div class="seg" id="seg">
+      <button type="button" data-v="all" aria-pressed="true">すべて</button>
+      <button type="button" data-v="todo" aria-pressed="false">未参拝</button>
+      <button type="button" data-v="done" aria-pressed="false">参拝済み</button>
+    </div>
+  </header>
+  <ul id="list"></ul>
+  <footer>
+    <button type="button" id="exportBtn">記録をコピー</button>
+    <button type="button" id="importBtn">記録を読み込む</button>
+  </footer>
+</aside>
+<div id="map"></div>
+<div id="toast" hidden></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const DATA = [{"name": "賀茂別雷神社", "cats": ["一宮"], "lat": 35.060278, "lng": 135.752778, "loc": "京都府京都市北区", "notes": {"一宮": "山城国一宮"}, "approx": false, "wiki": "賀茂別雷神社", "id": "賀茂別雷神社"}, {"name": "賀茂御祖神社", "cats": ["一宮"], "lat": 35.038889, "lng": 135.7725, "loc": "京都府京都市左京区", "notes": {"一宮": "山城国一宮"}, "approx": false, "wiki": "賀茂御祖神社", "id": "賀茂御祖神社"}, {"name": "大神神社", "cats": ["一宮"], "lat": 34.52875, "lng": 135.853, "loc": "奈良県桜井市", "notes": {"一宮": "大和国一宮"}, "approx": false, "wiki": "大神神社", "id": "大神神社"}, {"name": "枚岡神社", "cats": ["一宮"], "lat": 34.669953, "lng": 135.650689, "loc": "大阪府東大阪市", "notes": {"一宮": "河内国一宮"}, "approx": false, "wiki": "枚岡神社", "id": "枚岡神社"}, {"name": "大鳥大社", "cats": ["一宮"], "lat": 34.536861, "lng": 135.46075, "loc": "大阪府堺市西区", "notes": {"一宮": "和泉国一宮"}, "approx": false, "wiki": "大鳥大社", "id": "大鳥大社"}, {"name": "住吉大社", "cats": ["一宮"], "lat": 34.612711, "lng": 135.492512, "loc": "大阪府大阪市住吉区", "notes": {"一宮": "摂津国一宮"}, "approx": false, "wiki": "住吉大社", "id": "住吉大社"}, {"name": "敢国神社", "cats": ["一宮"], "lat": 34.787361, "lng": 136.163944, "loc": "三重県伊賀市", "notes": {"一宮": "伊賀国一宮"}, "approx": false, "wiki": "敢國神社", "id": "敢國神社"}, {"name": "椿大神社", "cats": ["一宮"], "lat": 34.964444, "lng": 136.451667, "loc": "三重県鈴鹿市", "notes": {"一宮": "伊勢国一宮"}, "approx": false, "wiki": "椿大神社", "id": "椿大神社"}, {"name": "都波岐神社", "cats": ["一宮"], "lat": 34.90118, "lng": 136.600479, "loc": "三重県鈴鹿市", "notes": {"一宮": "伊勢国一宮（二次史料等による）"}, "approx": false, "wiki": "都波岐神社・奈加等神社", "id": "都波岐神社・奈加等神社"}, {"name": "伊雑宮", "cats": ["一宮"], "lat": 34.380278, "lng": 136.808889, "loc": "三重県志摩市", "notes": {"一宮": "志摩国一宮"}, "approx": false, "wiki": "伊雑宮", "id": "伊雑宮"}, {"name": "伊射波神社", "cats": ["一宮"], "lat": 34.4729, "lng": 136.87435, "loc": "三重県鳥羽市", "notes": {"一宮": "志摩国一宮（二次史料等による）"}, "approx": false, "wiki": "伊射波神社", "id": "伊射波神社"}, {"name": "真清田神社", "cats": ["一宮"], "lat": 35.307556, "lng": 136.802086, "loc": "愛知県一宮市", "notes": {"一宮": "尾張国一宮"}, "approx": false, "wiki": "真清田神社", "id": "真清田神社"}, {"name": "砥鹿神社", "cats": ["一宮"], "lat": 34.847644, "lng": 137.4212, "loc": "愛知県豊川市", "notes": {"一宮": "三河国一宮"}, "approx": false, "wiki": "砥鹿神社", "id": "砥鹿神社"}, {"name": "小国神社", "cats": ["一宮"], "lat": 34.8475, "lng": 137.899167, "loc": "静岡県周智郡森町", "notes": {"一宮": "遠江国一宮"}, "approx": false, "wiki": "小国神社", "id": "小国神社"}, {"name": "事任八幡宮", "cats": ["一宮"], "lat": 34.798389, "lng": 138.075428, "loc": "静岡県掛川市", "notes": {"一宮": "遠江国一宮"}, "approx": false, "wiki": "事任八幡宮", "id": "事任八幡宮"}, {"name": "富士山本宮浅間大社", "cats": ["一宮"], "lat": 35.227406, "lng": 138.610003, "loc": "静岡県富士宮市", "notes": {"一宮": "駿河国一宮"}, "approx": false, "wiki": "富士山本宮浅間大社", "id": "富士山本宮浅間大社"}, {"name": "三嶋大社", "cats": ["一宮"], "lat": 35.122406, "lng": 138.918831, "loc": "静岡県三島市", "notes": {"一宮": "伊豆国一宮"}, "approx": false, "wiki": "三嶋大社", "id": "三嶋大社"}, {"name": "浅間神社", "cats": ["一宮"], "lat": 35.647758, "lng": 138.697442, "loc": "山梨県笛吹市", "notes": {"一宮": "甲斐国一宮"}, "approx": false, "wiki": "浅間神社 (笛吹市)", "id": "浅間神社 (笛吹市)"}, {"name": "寒川神社", "cats": ["一宮"], "lat": 35.379639, "lng": 139.383333, "loc": "神奈川県高座郡寒川町", "notes": {"一宮": "相模国一宮"}, "approx": false, "wiki": "寒川神社", "id": "寒川神社"}, {"name": "小野神社", "cats": ["一宮"], "lat": 35.653003, "lng": 139.442272, "loc": "東京都多摩市", "notes": {"一宮": "武蔵国一宮"}, "approx": false, "wiki": "小野神社 (多摩市)", "id": "小野神社 (多摩市)"}, {"name": "氷川神社", "cats": ["一宮"], "lat": 35.91675, "lng": 139.629733, "loc": "埼玉県さいたま市大宮区", "notes": {"一宮": "武蔵国一宮"}, "approx": false, "wiki": "氷川神社", "id": "氷川神社"}, {"name": "安房神社", "cats": ["一宮"], "lat": 34.922444, "lng": 139.836736, "loc": "千葉県館山市", "notes": {"一宮": "安房国一宮"}, "approx": false, "wiki": "安房神社", "id": "安房神社"}, {"name": "玉前神社", "cats": ["一宮"], "lat": 35.376097, "lng": 140.360483, "loc": "千葉県長生郡一宮町", "notes": {"一宮": "上総国一宮"}, "approx": false, "wiki": "玉前神社", "id": "玉前神社"}, {"name": "香取神宮", "cats": ["一宮"], "lat": 35.886119, "lng": 140.528686, "loc": "千葉県香取市", "notes": {"一宮": "下総国一宮"}, "approx": false, "wiki": "香取神宮", "id": "香取神宮"}, {"name": "鹿島神宮", "cats": ["一宮"], "lat": 35.968856, "lng": 140.631492, "loc": "茨城県鹿嶋市", "notes": {"一宮": "常陸国一宮"}, "approx": false, "wiki": "鹿島神宮", "id": "鹿島神宮"}, {"name": "建部大社", "cats": ["一宮"], "lat": 34.9735, "lng": 135.913506, "loc": "滋賀県大津市", "notes": {"一宮": "近江国一宮"}, "approx": false, "wiki": "建部大社", "id": "建部大社"}, {"name": "南宮大社", "cats": ["一宮"], "lat": 35.360972, "lng": 136.525306, "loc": "岐阜県不破郡垂井町", "notes": {"一宮": "美濃国一宮"}, "approx": false, "wiki": "南宮大社", "id": "南宮大社"}, {"name": "飛騨一宮水無神社", "cats": ["一宮"], "lat": 36.085306, "lng": 137.251861, "loc": "岐阜県高山市", "notes": {"一宮": "飛騨国一宮"}, "approx": false, "wiki": "飛騨一宮水無神社", "id": "飛騨一宮水無神社"}, {"name": "諏訪大社", "cats": ["一宮"], "lat": 35.998158, "lng": 138.119469, "loc": "長野県諏訪市・茅野市・諏訪郡下諏訪町", "notes": {"一宮": "信濃国一宮"}, "approx": false, "wiki": "諏訪大社", "id": "諏訪大社"}, {"name": "一之宮貫前神社", "cats": ["一宮"], "lat": 36.255153, "lng": 138.857653, "loc": "群馬県富岡市", "notes": {"一宮": "上野国一宮"}, "approx": false, "wiki": "一之宮貫前神社", "id": "一之宮貫前神社"}, {"name": "二荒山神社", "cats": ["一宮"], "lat": 36.5625, "lng": 139.885833, "loc": "栃木県宇都宮市", "notes": {"一宮": "下野国一宮"}, "approx": false, "wiki": "宇都宮二荒山神社", "id": "宇都宮二荒山神社"}, {"name": "二荒山神社", "cats": ["一宮"], "lat": 36.758422, "lng": 139.596389, "loc": "栃木県日光市", "notes": {"一宮": "下野国一宮（二次史料等による）"}, "approx": false, "wiki": "日光二荒山神社", "id": "日光二荒山神社"}, {"name": "鹽竈神社", "cats": ["一宮"], "lat": 38.31875, "lng": 141.012556, "loc": "宮城県塩竈市", "notes": {"一宮": "陸奥国一宮"}, "approx": false, "wiki": "鹽竈神社", "id": "鹽竈神社"}, {"name": "都都古和氣神社", "cats": ["一宮"], "lat": 37.032072, "lng": 140.375917, "loc": "福島県東白川郡棚倉町", "notes": {"一宮": "陸奥国一宮"}, "approx": false, "wiki": "都々古別神社#都都古和氣神社 (棚倉町棚倉)", "id": "都々古別神社#都都古和氣神社 (棚倉町棚倉)"}, {"name": "都々古別神社", "cats": ["一宮"], "lat": 36.994531, "lng": 140.3921, "loc": "福島県東白川郡棚倉町", "notes": {"一宮": "陸奥国一宮"}, "approx": false, "wiki": "都々古別神社#都々古別神社 (棚倉町八槻)", "id": "都々古別神社#都々古別神社 (棚倉町八槻)"}, {"name": "鳥海山大物忌神社", "cats": ["一宮"], "lat": 39.074139, "lng": 139.879028, "loc": "山形県飽海郡遊佐町", "notes": {"一宮": "出羽国一宮"}, "approx": false, "wiki": "鳥海山大物忌神社", "id": "鳥海山大物忌神社"}, {"name": "若狭彦神社", "cats": ["一宮"], "lat": 35.466083, "lng": 135.778472, "loc": "福井県小浜市", "notes": {"一宮": "若狭国一宮"}, "approx": false, "wiki": "若狭彦神社", "id": "若狭彦神社"}, {"name": "氣比神宮", "cats": ["一宮", "四所宗廟"], "lat": 35.654958, "lng": 136.0747, "loc": "福井県敦賀市", "notes": {"一宮": "越前国一宮", "四所宗廟": "越前国一宮でもある"}, "approx": false, "wiki": "氣比神宮", "id": "氣比神宮"}, {"name": "白山比咩神社", "cats": ["一宮"], "lat": 36.434889, "lng": 136.6362, "loc": "石川県白山市", "notes": {"一宮": "加賀国一宮"}, "approx": false, "wiki": "白山比咩神社", "id": "白山比咩神社"}, {"name": "石部神社", "cats": ["一宮"], "lat": 36.406611, "lng": 136.502833, "loc": "石川県小松市", "notes": {"一宮": "加賀国一宮（二次史料等による）"}, "approx": false, "wiki": "石部神社 (小松市)", "id": "石部神社 (小松市)"}, {"name": "氣多大社", "cats": ["一宮"], "lat": 36.926008, "lng": 136.767442, "loc": "石川県羽咋市", "notes": {"一宮": "能登国一宮"}, "approx": false, "wiki": "気多大社", "id": "気多大社"}, {"name": "気多神社", "cats": ["一宮"], "lat": 36.800222, "lng": 137.044306, "loc": "富山県高岡市", "notes": {"一宮": "越中国一宮"}, "approx": false, "wiki": "気多神社", "id": "気多神社"}, {"name": "高瀬神社", "cats": ["一宮"], "lat": 36.571861, "lng": 136.94825, "loc": "富山県南砺市", "notes": {"一宮": "越中国一宮"}, "approx": false, "wiki": "高瀬神社", "id": "高瀬神社"}, {"name": "射水神社", "cats": ["一宮"], "lat": 36.748528, "lng": 137.021333, "loc": "富山県高岡市", "notes": {"一宮": "越中国一宮"}, "approx": false, "wiki": "射水神社", "id": "射水神社"}, {"name": "雄山神社", "cats": ["一宮"], "lat": 36.607633, "lng": 137.314833, "loc": "富山県中新川郡立山町", "notes": {"一宮": "越中国一宮"}, "approx": false, "wiki": "雄山神社", "id": "雄山神社"}, {"name": "彌彦神社", "cats": ["一宮"], "lat": 37.706694, "lng": 138.826, "loc": "新潟県西蒲原郡弥彦村", "notes": {"一宮": "越後国一宮"}, "approx": false, "wiki": "彌彦神社", "id": "彌彦神社"}, {"name": "居多神社", "cats": ["一宮"], "lat": 37.166439, "lng": 138.223169, "loc": "新潟県上越市", "notes": {"一宮": "越後国一宮"}, "approx": false, "wiki": "居多神社", "id": "居多神社"}, {"name": "天津神社", "cats": ["一宮"], "lat": 37.04015, "lng": 137.864225, "loc": "新潟県糸魚川市", "notes": {"一宮": "越後国一宮（二次史料等による）"}, "approx": false, "wiki": "天津神社 (糸魚川市)", "id": "天津神社 (糸魚川市)"}, {"name": "度津神社", "cats": ["一宮"], "lat": 37.86025, "lng": 138.330639, "loc": "新潟県佐渡市", "notes": {"一宮": "佐渡国一宮"}, "approx": false, "wiki": "度津神社", "id": "度津神社"}, {"name": "出雲大神宮", "cats": ["一宮"], "lat": 35.059406, "lng": 135.578411, "loc": "京都府亀岡市", "notes": {"一宮": "丹波国一宮"}, "approx": false, "wiki": "出雲大神宮", "id": "出雲大神宮"}, {"name": "籠神社", "cats": ["一宮"], "lat": 35.582814, "lng": 135.196669, "loc": "京都府宮津市", "notes": {"一宮": "丹後国一宮"}, "approx": false, "wiki": "籠神社", "id": "籠神社"}, {"name": "出石神社", "cats": ["一宮"], "lat": 35.481944, "lng": 134.870286, "loc": "兵庫県豊岡市", "notes": {"一宮": "但馬国一宮"}, "approx": false, "wiki": "出石神社", "id": "出石神社"}, {"name": "粟鹿神社", "cats": ["一宮"], "lat": 35.300803, "lng": 134.904811, "loc": "兵庫県朝来市", "notes": {"一宮": "但馬国一宮（二次史料等による）"}, "approx": false, "wiki": "粟鹿神社", "id": "粟鹿神社"}, {"name": "宇倍神社", "cats": ["一宮"], "lat": 35.480833, "lng": 134.268889, "loc": "鳥取県鳥取市", "notes": {"一宮": "因幡国一宮"}, "approx": false, "wiki": "宇倍神社", "id": "宇倍神社"}, {"name": "倭文神社", "cats": ["一宮"], "lat": 35.490372, "lng": 133.902967, "loc": "鳥取県東伯郡湯梨浜町", "notes": {"一宮": "伯耆国一宮"}, "approx": false, "wiki": "倭文神社 (湯梨浜町)", "id": "倭文神社 (湯梨浜町)"}, {"name": "出雲大社", "cats": ["一宮"], "lat": 35.402056, "lng": 132.685444, "loc": "島根県出雲市", "notes": {"一宮": "出雲国一宮"}, "approx": false, "wiki": "出雲大社", "id": "出雲大社"}, {"name": "物部神社", "cats": ["一宮"], "lat": 35.155, "lng": 132.513472, "loc": "島根県大田市", "notes": {"一宮": "石見国一宮"}, "approx": false, "wiki": "物部神社 (大田市)", "id": "物部神社 (大田市)"}, {"name": "水若酢神社", "cats": ["一宮"], "lat": 36.280217, "lng": 133.249039, "loc": "島根県隠岐郡隠岐の島町", "notes": {"一宮": "隠岐国一宮"}, "approx": false, "wiki": "水若酢神社", "id": "水若酢神社"}, {"name": "由良比女神社", "cats": ["一宮"], "lat": 36.091939, "lng": 132.987839, "loc": "島根県隠岐郡西ノ島町", "notes": {"一宮": "隠岐国一宮（二次史料等による）"}, "approx": false, "wiki": "由良比女神社", "id": "由良比女神社"}, {"name": "伊和神社", "cats": ["一宮"], "lat": 35.087528, "lng": 134.586472, "loc": "兵庫県宍粟市", "notes": {"一宮": "播磨国一宮"}, "approx": false, "wiki": "伊和神社", "id": "伊和神社"}, {"name": "中山神社", "cats": ["一宮"], "lat": 35.100217, "lng": 133.994592, "loc": "岡山県津山市", "notes": {"一宮": "美作国一宮"}, "approx": false, "wiki": "中山神社", "id": "中山神社"}, {"name": "吉備津彦神社", "cats": ["一宮"], "lat": 34.676753, "lng": 133.863853, "loc": "岡山県岡山市北区", "notes": {"一宮": "備前国一宮"}, "approx": false, "wiki": "吉備津彦神社", "id": "吉備津彦神社"}, {"name": "吉備津神社", "cats": ["一宮"], "lat": 34.670667, "lng": 133.850611, "loc": "岡山県岡山市北区", "notes": {"一宮": "備中国一宮"}, "approx": false, "wiki": "吉備津神社", "id": "吉備津神社"}, {"name": "吉備津神社", "cats": ["一宮"], "lat": 34.569336, "lng": 133.271069, "loc": "広島県福山市", "notes": {"一宮": "備後国一宮"}, "approx": false, "wiki": "吉備津神社 (福山市)", "id": "吉備津神社 (福山市)"}, {"name": "厳島神社", "cats": ["一宮"], "lat": 34.296022, "lng": 132.319894, "loc": "広島県廿日市市", "notes": {"一宮": "安芸国一宮"}, "approx": false, "wiki": "厳島神社", "id": "厳島神社"}, {"name": "玉祖神社", "cats": ["一宮"], "lat": 34.057708, "lng": 131.533653, "loc": "山口県防府市", "notes": {"一宮": "周防国一宮"}, "approx": false, "wiki": "玉祖神社", "id": "玉祖神社"}, {"name": "住吉神社", "cats": ["一宮"], "lat": 33.999611, "lng": 130.956556, "loc": "山口県下関市", "notes": {"一宮": "長門国一宮"}, "approx": false, "wiki": "住吉神社 (下関市)", "id": "住吉神社 (下関市)"}, {"name": "日前神宮・國懸神宮", "cats": ["一宮"], "lat": 34.228889, "lng": 135.202222, "loc": "和歌山県和歌山市", "notes": {"一宮": "紀伊国一宮"}, "approx": false, "wiki": "日前神宮・國懸神宮", "id": "日前神宮・國懸神宮"}, {"name": "丹生都比売神社", "cats": ["一宮"], "lat": 34.262722, "lng": 135.522, "loc": "和歌山県伊都郡かつらぎ町", "notes": {"一宮": "紀伊国一宮"}, "approx": false, "wiki": "丹生都比売神社", "id": "丹生都比売神社"}, {"name": "伊太祁󠄀曽神社", "cats": ["一宮"], "lat": 34.201694, "lng": 135.25, "loc": "和歌山県和歌山市", "notes": {"一宮": "紀伊国一宮"}, "approx": false, "wiki": "伊太祁曽神社", "id": "伊太祁曽神社"}, {"name": "伊弉諾神宮", "cats": ["一宮"], "lat": 34.46, "lng": 134.852222, "loc": "兵庫県淡路市", "notes": {"一宮": "淡路国一宮"}, "approx": false, "wiki": "伊弉諾神宮", "id": "伊弉諾神宮"}, {"name": "上一宮大粟神社", "cats": ["一宮"], "lat": 33.971006, "lng": 134.366969, "loc": "徳島県名西郡神山町", "notes": {"一宮": "阿波国一宮"}, "approx": false, "wiki": "上一宮大粟神社", "id": "上一宮大粟神社"}, {"name": "一宮神社", "cats": ["一宮"], "lat": 34.037806, "lng": 134.462639, "loc": "徳島県徳島市", "notes": {"一宮": "阿波国一宮"}, "approx": false, "wiki": "一宮神社 (徳島市)", "id": "一宮神社 (徳島市)"}, {"name": "大麻比古神社", "cats": ["一宮"], "lat": 34.170928, "lng": 134.502567, "loc": "徳島県鳴門市", "notes": {"一宮": "阿波国一宮"}, "approx": false, "wiki": "大麻比古神社", "id": "大麻比古神社"}, {"name": "八倉比売神社", "cats": ["一宮"], "lat": 34.055781, "lng": 134.464958, "loc": "徳島県徳島市", "notes": {"一宮": "阿波国一宮"}, "approx": false, "wiki": "八倉比売神社", "id": "八倉比売神社"}, {"name": "田村神社", "cats": ["一宮"], "lat": 34.286536, "lng": 134.027292, "loc": "香川県高松市", "notes": {"一宮": "讃岐国一宮"}, "approx": false, "wiki": "田村神社 (高松市)", "id": "田村神社 (高松市)"}, {"name": "大山祇神社", "cats": ["一宮"], "lat": 34.247903, "lng": 133.005806, "loc": "愛媛県今治市", "notes": {"一宮": "伊予国一宮"}, "approx": false, "wiki": "大山祇神社", "id": "大山祇神社"}, {"name": "土佐神社", "cats": ["一宮"], "lat": 33.592622, "lng": 133.577014, "loc": "高知県高知市", "notes": {"一宮": "土佐国一宮"}, "approx": false, "wiki": "土佐神社", "id": "土佐神社"}, {"name": "住吉神社", "cats": ["一宮"], "lat": 33.585906, "lng": 130.413703, "loc": "福岡県福岡市博多区", "notes": {"一宮": "筑前国一宮"}, "approx": false, "wiki": "住吉神社 (福岡市)", "id": "住吉神社 (福岡市)"}, {"name": "筥崎宮", "cats": ["一宮"], "lat": 33.6147, "lng": 130.423133, "loc": "福岡県福岡市東区", "notes": {"一宮": "筑前国一宮（二次史料等による）"}, "approx": false, "wiki": "筥崎宮", "id": "筥崎宮"}, {"name": "高良大社", "cats": ["一宮"], "lat": 33.301619, "lng": 130.565911, "loc": "福岡県久留米市", "notes": {"一宮": "筑後国一宮"}, "approx": false, "wiki": "高良大社", "id": "高良大社"}, {"name": "宇佐神宮", "cats": ["一宮"], "lat": 33.526111, "lng": 131.374722, "loc": "大分県宇佐市", "notes": {"一宮": "豊前国一宮"}, "approx": false, "wiki": "宇佐神宮", "id": "宇佐神宮"}, {"name": "柞原八幡宮", "cats": ["一宮"], "lat": 33.238397, "lng": 131.551008, "loc": "大分県大分市", "notes": {"一宮": "豊後国一宮"}, "approx": false, "wiki": "柞原八幡宮", "id": "柞原八幡宮"}, {"name": "西寒多神社", "cats": ["一宮"], "lat": 33.172778, "lng": 131.598389, "loc": "大分県大分市", "notes": {"一宮": "豊後国一宮（二次史料等による）"}, "approx": false, "wiki": "西寒多神社", "id": "西寒多神社"}, {"name": "與止日女神社", "cats": ["一宮"], "lat": 33.326311, "lng": 130.268339, "loc": "佐賀県佐賀市", "notes": {"一宮": "肥前国一宮"}, "approx": false, "wiki": "與止日女神社", "id": "與止日女神社"}, {"name": "千栗八幡宮", "cats": ["一宮"], "lat": 33.331417, "lng": 130.478722, "loc": "佐賀県三養基郡みやき町", "notes": {"一宮": "肥前国一宮"}, "approx": false, "wiki": "千栗八幡宮", "id": "千栗八幡宮"}, {"name": "阿蘇神社", "cats": ["一宮"], "lat": 32.947778, "lng": 131.115972, "loc": "熊本県阿蘇市", "notes": {"一宮": "肥後国一宮"}, "approx": false, "wiki": "阿蘇神社", "id": "阿蘇神社"}, {"name": "都農神社", "cats": ["一宮"], "lat": 32.263117, "lng": 131.558667, "loc": "宮崎県児湯郡都農町", "notes": {"一宮": "日向国一宮"}, "approx": false, "wiki": "都農神社", "id": "都農神社"}, {"name": "鹿児島神宮", "cats": ["一宮"], "lat": 31.753714, "lng": 130.737869, "loc": "鹿児島県霧島市", "notes": {"一宮": "大隅国一宮"}, "approx": false, "wiki": "鹿児島神宮", "id": "鹿児島神宮"}, {"name": "枚聞神社", "cats": ["一宮"], "lat": 31.207639, "lng": 130.539611, "loc": "鹿児島県指宿市", "notes": {"一宮": "薩摩国一宮"}, "approx": false, "wiki": "枚聞神社", "id": "枚聞神社"}, {"name": "新田神社", "cats": ["一宮"], "lat": 31.827661, "lng": 130.292672, "loc": "鹿児島県薩摩川内市", "notes": {"一宮": "薩摩国一宮"}, "approx": false, "wiki": "新田神社 (薩摩川内市)", "id": "新田神社 (薩摩川内市)"}, {"name": "興神社", "cats": ["一宮"], "lat": 33.769806, "lng": 129.731722, "loc": "長崎県壱岐市", "notes": {"一宮": "壱岐国一宮"}, "approx": false, "wiki": "興神社", "id": "興神社"}, {"name": "天手長男神社", "cats": ["一宮"], "lat": 33.764139, "lng": 129.7025, "loc": "長崎県壱岐市", "notes": {"一宮": "壱岐国一宮（二次史料等による）"}, "approx": false, "wiki": "天手長男神社", "id": "天手長男神社"}, {"name": "海神神社", "cats": ["一宮"], "lat": 34.46425, "lng": 129.283333, "loc": "長崎県対馬市", "notes": {"一宮": "対馬国一宮"}, "approx": false, "wiki": "海神神社", "id": "海神神社"}, {"name": "厳原八幡宮神社", "cats": ["一宮"], "lat": 34.2065, "lng": 129.28925, "loc": "長崎県対馬市", "notes": {"一宮": "対馬国一宮"}, "approx": false, "wiki": "厳原八幡宮神社", "id": "厳原八幡宮神社"}, {"name": "伊勢神宮（皇大神宮）", "cats": ["四所宗廟"], "lat": 34.455, "lng": 136.725175, "loc": "三重県伊勢市", "notes": {"四所宗廟": "本朝四所の筆頭"}, "approx": false, "wiki": "皇大神宮", "id": "皇大神宮"}, {"name": "石清水八幡宮", "cats": ["四所宗廟"], "lat": 34.879667, "lng": 135.700056, "loc": "京都府八幡市", "notes": {"四所宗廟": ""}, "approx": false, "wiki": "石清水八幡宮", "id": "石清水八幡宮"}, {"name": "香椎宮", "cats": ["四所宗廟"], "lat": 33.653486, "lng": 130.452658, "loc": "福岡県福岡市東区", "notes": {"四所宗廟": ""}, "approx": false, "wiki": "香椎宮", "id": "香椎宮"}, {"name": "伏見稲荷大社", "cats": ["日本三大稲荷"], "lat": 34.966944, "lng": 135.773056, "loc": "京都府京都市伏見区", "notes": {"日本三大稲荷": "一般的に挙げられる4社寺のひとつ"}, "approx": false, "wiki": "伏見稲荷大社", "id": "伏見稲荷大社"}, {"name": "豊川稲荷（妙厳寺）", "cats": ["日本三大稲荷"], "lat": 34.824517, "lng": 137.392011, "loc": "愛知県豊川市", "notes": {"日本三大稲荷": "一般的に挙げられる4社寺のひとつ"}, "approx": false, "wiki": "豊川稲荷", "id": "豊川稲荷"}, {"name": "笠間稲荷神社", "cats": ["日本三大稲荷"], "lat": 36.386083, "lng": 140.254111, "loc": "茨城県笠間市", "notes": {"日本三大稲荷": "一般的に挙げられる4社寺のひとつ"}, "approx": false, "wiki": "笠間稲荷神社", "id": "笠間稲荷神社"}, {"name": "祐徳稲荷神社", "cats": ["日本三大稲荷"], "lat": 33.073611, "lng": 130.108333, "loc": "佐賀県鹿島市", "notes": {"日本三大稲荷": "一般的に挙げられる4社寺のひとつ"}, "approx": false, "wiki": "祐徳稲荷神社", "id": "祐徳稲荷神社"}, {"name": "竹駒神社", "cats": ["日本三大稲荷"], "lat": 38.105, "lng": 140.862333, "loc": "宮城県岩沼市", "notes": {"日本三大稲荷": "地域や説によって三大稲荷に数えられる"}, "approx": false, "wiki": "竹駒神社", "id": "竹駒神社"}, {"name": "最上稲荷（妙教寺）", "cats": ["日本三大稲荷"], "lat": 34.708956, "lng": 133.833411, "loc": "岡山県岡山市北区", "notes": {"日本三大稲荷": "地域や説によって三大稲荷に数えられる"}, "approx": false, "wiki": "最上稲荷", "id": "最上稲荷"}, {"name": "志和稲荷神社", "cats": ["日本三大稲荷"], "lat": 39.558917, "lng": 141.077833, "loc": "岩手県紫波町", "notes": {"日本三大稲荷": "地域や説によって三大稲荷に数えられる"}, "approx": false, "wiki": "志和稲荷神社", "id": "志和稲荷神社"}, {"name": "箭弓稲荷神社", "cats": ["日本三大稲荷"], "lat": 36.034444, "lng": 139.398611, "loc": "埼玉県東松山市", "notes": {"日本三大稲荷": "地域や説によって三大稲荷に数えられる"}, "approx": false, "wiki": "箭弓稲荷神社 (東松山市)", "id": "箭弓稲荷神社 (東松山市)"}, {"name": "鼻顔稲荷神社", "cats": ["日本三大稲荷"], "lat": 36.271772, "lng": 138.487456, "loc": "長野県佐久市", "notes": {"日本三大稲荷": "地域や説によって三大稲荷に数えられる"}, "approx": false, "wiki": "鼻顔稲荷神社", "id": "鼻顔稲荷神社"}, {"name": "千代保稲荷神社", "cats": ["日本三大稲荷"], "lat": 35.263512, "lng": 136.646423, "loc": "岐阜県海津市", "notes": {"日本三大稲荷": "地域や説によって三大稲荷に数えられる"}, "approx": false, "wiki": "千代保稲荷神社", "id": "千代保稲荷神社"}, {"name": "瓢箪山稲荷神社", "cats": ["日本三大稲荷"], "lat": 34.660656, "lng": 135.641891, "loc": "大阪府東大阪市", "notes": {"日本三大稲荷": "地域や説によって三大稲荷に数えられる"}, "approx": false, "wiki": "瓢箪山稲荷神社", "id": "瓢箪山稲荷神社"}, {"name": "源九郎稲荷神社", "cats": ["日本三大稲荷"], "lat": 34.645596, "lng": 135.785217, "loc": "奈良県大和郡山市", "notes": {"日本三大稲荷": "地域や説によって三大稲荷に数えられる"}, "approx": false, "wiki": "源九郎稲荷神社", "id": "源九郎稲荷神社"}, {"name": "太皷谷稲成神社", "cats": ["日本三大稲荷"], "lat": 34.465417, "lng": 131.769167, "loc": "島根県津和野町", "notes": {"日本三大稲荷": "地域や説によって三大稲荷に数えられる"}, "approx": false, "wiki": "太皷谷稲成神社", "id": "太皷谷稲成神社"}, {"name": "草戸稲荷神社", "cats": ["日本三大稲荷"], "lat": 34.479472, "lng": 133.346361, "loc": "広島県福山市", "notes": {"日本三大稲荷": "地域や説によって三大稲荷に数えられる"}, "approx": false, "wiki": "草戸稲荷神社", "id": "草戸稲荷神社"}, {"name": "四所神社（つがる市）", "cats": ["四所神社"], "lat": 40.808739, "lng": 140.380188, "loc": "青森県つがる市", "notes": {"四所神社": ""}, "approx": true, "wiki": "四所神社 (つがる市)", "id": "四所神社 (つがる市)"}, {"name": "高岩四所神社", "cats": ["四所神社"], "lat": 35.610554, "lng": 138.940002, "loc": "山梨県大月市", "notes": {"四所神社": ""}, "approx": true, "wiki": "高岩四所神社", "id": "高岩四所神社"}, {"name": "日吉倉四所神社", "cats": ["四所神社"], "lat": 35.761814, "lng": 140.325195, "loc": "千葉県富里市日吉倉", "notes": {"四所神社": ""}, "approx": true, "wiki": "日吉倉四所神社", "id": "日吉倉四所神社"}, {"name": "四所神社（山武市）", "cats": ["四所神社"], "lat": 35.595471, "lng": 140.41311, "loc": "千葉県山武市", "notes": {"四所神社": ""}, "approx": false, "wiki": "四所神社 (山武市)", "id": "四所神社 (山武市)"}, {"name": "四所神社（豊岡市）", "cats": ["四所神社"], "lat": 35.626222, "lng": 134.807611, "loc": "兵庫県豊岡市城崎町湯島", "notes": {"四所神社": ""}, "approx": false, "wiki": "四所神社 (豊岡市)", "id": "四所神社 (豊岡市)"}, {"name": "四所神社（十津川村）", "cats": ["四所神社"], "lat": 33.988609, "lng": 135.792496, "loc": "奈良県吉野郡十津川村", "notes": {"四所神社": ""}, "approx": true, "wiki": "四所神社 (十津川村)", "id": "四所神社 (十津川村)"}, {"name": "四所神社（徳島市）", "cats": ["四所神社"], "lat": 34.072056, "lng": 134.569694, "loc": "徳島県徳島市福島", "notes": {"四所神社": ""}, "approx": false, "wiki": "四所神社 (徳島市)", "id": "四所神社 (徳島市)"}, {"name": "四所神社（三好市山城町）", "cats": ["四所神社"], "lat": 33.969639, "lng": 133.714535, "loc": "徳島県三好市山城町大月", "notes": {"四所神社": ""}, "approx": false, "wiki": "四所神社 (三好市山城町)", "id": "四所神社 (三好市山城町)"}, {"name": "四所神社（三好市西祖谷山村）", "cats": ["四所神社"], "lat": 33.889523, "lng": 133.789597, "loc": "徳島県三好市西祖谷山村後山", "notes": {"四所神社": ""}, "approx": true, "wiki": "四所神社 (三好市西祖谷山村)", "id": "四所神社 (三好市西祖谷山村)"}];
+const STORE_KEY = 'shrine-map-visits-v1';
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const CATS = [
+  { key: '一宮', color: css('--c-ichi') },
+  { key: '四所宗廟', color: css('--c-sobyo') },
+  { key: '日本三大稲荷', color: css('--c-inari') },
+  { key: '四所神社', color: css('--c-shisho') },
+];
+const colorOf = k => CATS.find(c => c.key === k).color;
+const on = new Set(CATS.map(c => c.key));
+let mode = 'all';
+
+// 参拝記録 { 社のid: 'YYYY-MM-DD' }
+function loadVisits() {
+  try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch { return {}; }
+}
+function saveVisits() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(visits)); } catch {}
+}
+let visits = loadVisits();
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.hidden = false;
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => { t.hidden = true; }, 2000);
+}
+
+const map = L.map('map').setView([36.2, 137.5], 5);
+L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {
+  maxZoom: 18, attribution: '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">地理院タイル</a>'
+}).addTo(map);
+
+function icon(p) {
+  const done = !!visits[p.id];
+  return L.divIcon({
+    className: '', iconSize: null,
+    html: `<div class="pin${p.cats.length > 1 ? ' big' : ''}${done ? ' done' : ''}" style="background:${colorOf(p.cats[0])}">${done ? '✓' : ''}</div>`,
+  });
+}
+
+DATA.forEach(p => {
+  p.marker = L.marker([p.lat, p.lng], { icon: icon(p) }).bindPopup(() => popup(p), { maxWidth: 280 });
+});
+
+function popup(p) {
+  const tags = p.cats.map(c => `<span class="tag" style="background:${colorOf(c)}">${c}</span>`).join('');
+  const notes = p.cats.map(c => p.notes[c]).filter(Boolean).map(n => `<div>${n}</div>`).join('');
+  const gm = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name.replace(/（.*?）/, '') + ' ' + p.loc)}`;
+  const wk = `https://ja.wikipedia.org/wiki/${encodeURIComponent(p.wiki)}`;
+  const done = visits[p.id];
+  const el = document.createElement('div');
+  el.className = 'pop';
+  el.innerHTML = `<h3>${p.name}</h3><div class="tags">${tags}</div>${notes}<div>${p.loc}</div>` +
+    (p.approx ? '<div class="approx">※ 正確な位置が不明のため、市町村・地区の中心付近に置いています</div>' : '') +
+    `<div class="links"><a href="${gm}" target="_blank">Googleマップ</a><a href="${wk}" target="_blank">Wikipedia</a></div>` +
+    `<button type="button" class="visit${done ? ' on' : ''}">${done ? `✓ 参拝済み（${done.replaceAll('-', '/')}）` : '参拝した'}</button>`;
+  el.querySelector('.visit').addEventListener('click', () => { toggle(p); p.marker.setPopupContent(popup(p)); });
+  return el;
+}
+
+function toggle(p) {
+  if (visits[p.id]) {
+    delete visits[p.id];
+    toast(`${p.name} の記録を外しました`);
+  } else {
+    visits[p.id] = today();
+    toast(`${p.name} を参拝済みにしました`);
+  }
+  saveVisits();
+  p.marker.setIcon(icon(p));
+  render();
+}
+
+// 現在地ボタン
+let me = null;
+const Locate = L.Control.extend({
+  options: { position: 'topleft' },
+  onAdd() {
+    const b = L.DomUtil.create('button', 'leaflet-bar locate');
+    b.type = 'button'; b.title = '現在地'; b.innerHTML = '◎';
+    L.DomEvent.on(b, 'click', e => { L.DomEvent.stop(e); map.locate({ setView: true, maxZoom: 12 }); });
+    return b;
+  },
+});
+map.addControl(new Locate());
+map.on('locationfound', e => {
+  if (me) me.setLatLng(e.latlng);
+  else me = L.marker(e.latlng, { icon: L.divIcon({ className: '', iconSize: null, html: '<div class="pin me"></div>' }), interactive: false }).addTo(map);
+});
+map.on('locationerror', () => toast('現在地を取得できませんでした。位置情報の許可を確認してください'));
+
+const catsEl = document.getElementById('cats');
+CATS.forEach(c => {
+  const lab = document.createElement('label');
+  lab.className = 'cat';
+  lab.innerHTML = `<input type="checkbox" id="cat-${c.key}" checked><span class="dot" style="background:${c.color}"></span>${c.key}<span class="n" data-cat="${c.key}"></span>`;
+  lab.querySelector('input').addEventListener('change', e => { e.target.checked ? on.add(c.key) : on.delete(c.key); render(); });
+  catsEl.appendChild(lab);
+});
+document.getElementById('total').textContent = DATA.length;
+document.getElementById('q').addEventListener('input', render);
+document.querySelectorAll('#seg button').forEach(b => b.addEventListener('click', () => {
+  mode = b.dataset.v;
+  document.querySelectorAll('#seg button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  render();
+}));
+
+function render() {
+  const q = document.getElementById('q').value.trim();
+  const list = document.getElementById('list');
+  list.innerHTML = '';
+  let shown = 0;
+  DATA.forEach(p => {
+    const done = !!visits[p.id];
+    const visible = p.cats.some(c => on.has(c)) &&
+      (mode === 'all' || (mode === 'done') === done) &&
+      (!q || [p.name, p.loc, ...Object.values(p.notes)].join(' ').includes(q));
+    if (!visible) { p.marker.remove(); return; }
+    shown++;
+    p.marker.addTo(map);
+    const li = document.createElement('li');
+    if (done) li.className = 'done';
+    li.style.setProperty('--c', colorOf(p.cats[0]));
+    li.innerHTML = `<button type="button" class="chk" aria-label="${p.name}を参拝済みにする" aria-pressed="${done}"><span class="box">${done ? '✓' : ''}</span></button>` +
+      `<div class="info" tabindex="0"><div class="nm" data-date="${done ? visits[p.id].replaceAll('-', '/') : ''}">${p.name}</div>` +
+      `<div class="meta">${p.notes['一宮'] || p.cats.join('・')}　${p.loc}</div></div>`;
+    li.querySelector('.chk').addEventListener('click', () => toggle(p));
+    const go = () => { map.flyTo([p.lat, p.lng], 13, { duration: .8 }); p.marker.openPopup(); };
+    li.querySelector('.info').addEventListener('click', go);
+    li.querySelector('.info').addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+    list.appendChild(li);
+  });
+  if (!shown) list.innerHTML = '<li class="empty">条件に合う神社はありません</li>';
+  document.getElementById('doneCount').textContent = DATA.filter(p => visits[p.id]).length;
+  document.querySelectorAll('.cat .n').forEach(n => {
+    const all = DATA.filter(p => p.cats.includes(n.dataset.cat));
+    n.textContent = `${all.filter(p => visits[p.id]).length}/${all.length}`;
+  });
+}
+
+// 記録のバックアップ（機種変更や Safari のデータ削除に備える）
+document.getElementById('exportBtn').addEventListener('click', async () => {
+  const text = JSON.stringify(visits);
+  try { await navigator.clipboard.writeText(text); toast('記録をコピーしました。メモ帳などに貼って保存してください'); }
+  catch { window.prompt('この文字列をコピーして保存してください', text); }
+});
+document.getElementById('importBtn').addEventListener('click', () => {
+  const text = window.prompt('保存しておいた記録を貼り付けてください');
+  if (!text) return;
+  try {
+    const data = JSON.parse(text);
+    const ids = new Set(DATA.map(p => p.id));
+    let n = 0;
+    for (const [id, date] of Object.entries(data)) {
+      if (ids.has(id) && /^\d{4}-\d{2}-\d{2}$/.test(date)) { visits[id] = date; n++; }
+    }
+    saveVisits();
+    DATA.forEach(p => p.marker.setIcon(icon(p)));
+    render();
+    toast(`${n} 件の記録を読み込みました`);
+  } catch { toast('読み込めませんでした。コピーした文字列をそのまま貼り付けてください'); }
+});
+
+render();
+map.fitBounds(DATA.map(p => [p.lat, p.lng]), { padding: [20, 20] });
+
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js');
+}
+</script>
+</body>
+</html>
