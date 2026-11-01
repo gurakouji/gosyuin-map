@@ -1,5 +1,5 @@
 // アプリ本体は先に保存し、地図タイルは見た分だけ保存して圏外でも表示できるようにする
-const VERSION = 'v1';
+const VERSION = 'v5';
 const APP = `app-${VERSION}`;
 const TILES = 'tiles';
 const SHELL = [
